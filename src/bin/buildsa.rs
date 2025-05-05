@@ -2,103 +2,83 @@ use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::cmp::Ordering;
-use minimizer_sa::shared::{MinimizerStringData, get_reference};
+use minimizer_sa::shared::{MinimizerStringData, compute_minimizers, get_reference};
 
 
 // TODO: add a terminal minimizer to the minimizer sequence?
-// maybe not since a prefix of another sequence is less than that sequence with rust comparison
+// maybe not since a prefix of another sequence is less than that sequence with how rust does comparison
 
 
-// Function to compute the minimizer sequence and map to original positions
-// Computes lexicographical minimizers
-fn compute_minimizers(sequence: &str, k: usize, w: usize) -> (Vec<String>, Vec<usize>) {
-    let mut minimizer_seq: Vec<String> = Vec::new();
-    let mut original_pos: Vec<usize> = Vec::new();
+// buildsa function to work on minimizers (storing indices only)
+fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str) -> () {
+    // Get the original reference sequence. This is needed for comparisons during sorting.
+    let original_reference = get_reference(reference_path);
 
-    // Process the sequence
-    let effective_len = sequence.len();
-
-    if effective_len < k {
-        // Sequence is too short to even form a k-mer
-        return (minimizer_seq, original_pos);
+    if original_reference.is_empty() {
+         eprintln!("Error: Reference sequence is empty.");
+         return;
     }
 
-    // Slide a window of size w
-    for i in 0..=(effective_len.saturating_sub(w)) {
-        let window = &sequence[i..std::cmp::min(i + w, effective_len)];
+    // Compute the minimizer sequence, which is now a vector of original genome positions.
+    let minimizer_sequence = compute_minimizers(&original_reference, minimizer_k, window_w);
 
-        if window.len() < k {
-            // Window is too short to contain a k-mer of size k
-            break; // Should not happen if loop bounds are correct
-        }
+    if minimizer_sequence.is_empty() {
+        eprintln!("Error: Could not compute minimizers. Check parameters or reference sequence length.");
+        return;
+    }
 
-        let mut min_kmer: Option<&str> = None;
-        let mut min_kmer_start_in_window = 0; // Start position of minimizer relative to window start
+    // Build the suffix array on the *minimizer_sequence* (Vec<usize> of original positions).
+    // The indices in minimizer_sa will point into the `minimizer_sequence` vector.
+    let mut minimizer_sa: Vec<usize> = (0..minimizer_sequence.len()).collect();
 
-        // Find the lexicographically smallest k-mer in the current window
-        for j in 0..=(window.len().saturating_sub(k)) {
-            let current_kmer = &window[j..j + k];
+    // Sort based on suffixes of the minimizer sequence.
+    // The comparison now involves looking up k-mer strings in the original_reference
+    // using the original genome positions stored in minimizer_sequence.
+    minimizer_sa.sort_by(|idx1: &usize, idx2| {
+        // Get the starting indices in the minimizer_sequence for the two suffixes being compared
+        let mut sa_idx1_in_minimizers = *idx1;
+        let mut sa_idx2_in_minimizers = *idx2;
 
-            match min_kmer {
-                None => {
-                    // First k-mer in the window becomes the initial minimum
-                    min_kmer = Some(current_kmer);
-                    min_kmer_start_in_window = j;
-                }
-                Some(existing_min) => {
-                    // Compare current k-mer with the current minimum
-                    if current_kmer.cmp(existing_min) < Ordering::Less {
-                        min_kmer = Some(current_kmer);
-                        min_kmer_start_in_window = j;
+        // Compare the suffixes element by element (where each element is a minimizer's k-mer)
+        loop {
+            // Check if we've reached the end of either suffix in the minimizer sequence
+            let end_of_suffix1 = sa_idx1_in_minimizers >= minimizer_sequence.len();
+            let end_of_suffix2 = sa_idx2_in_minimizers >= minimizer_sequence.len();
+
+            match (end_of_suffix1, end_of_suffix2) {
+                (true, true) => return Ordering::Equal, // Both suffixes end at the same time
+                (true, false) => return Ordering::Less, // Suffix 1 is a prefix of Suffix 2
+                (false, true) => return Ordering::Greater, // Suffix 2 is a prefix of Suffix 1
+                (false, false) => {
+                    // Get the original genome positions for the current minimizers
+                    let pos1 = minimizer_sequence[sa_idx1_in_minimizers];
+                    let pos2 = minimizer_sequence[sa_idx2_in_minimizers];
+
+                    // Extract the k-mer strings from the original reference
+                    // Ensure we don't go out of bounds when extracting k-mers
+                    let kmer1 = &original_reference[pos1..(pos1 + minimizer_k).min(original_reference.len())];
+                    let kmer2 = &original_reference[pos2..(pos2 + minimizer_k).min(original_reference.len())];
+
+
+                    // Compare the k-mer strings
+                    match kmer1.cmp(kmer2) {
+                        Ordering::Equal => {
+                            // K-mers are equal, continue to the next minimizer in the sequence
+                            sa_idx1_in_minimizers += 1;
+                            sa_idx2_in_minimizers += 1;
+                        }
+                        ordering => return ordering, // K-mers are different, return the comparison result
                     }
                 }
             }
         }
-
-        // If a valid minimizer was found in the window (it should be if w >= k)
-        if let Some(minimizer) = min_kmer {
-            minimizer_seq.push(minimizer.to_string());
-            // The original genome position for this minimizer is the start of the window (i)
-            // plus the start of the minimizer within that window.
-            original_pos.push(i + min_kmer_start_in_window);
-        }
-    }
-
-    (minimizer_seq, original_pos)
-}
-
-
-// buildsa function to work on minimizers
-fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str) -> () {
-    let original_reference = get_reference(reference_path);
-
-    // Compute the minimizer sequence and the mapping
-    let (minimizer_sequence, minimizer_to_genome_pos) =
-        compute_minimizers(&original_reference, minimizer_k, window_w);
-
-    // Check if minimizer sequence was generated
-    if minimizer_sequence.is_empty() {
-        eprintln!("Error: Could not compute minimizers. Check parameters or reference sequence.");
-        // Consider if you want to save an empty file or indicate failure differently
-        return;
-    }
-
-    // Build the suffix array on the *minimizer sequence*
-    // The indices in minimizer_sa will point into the `minimizer_sequence` vector.
-    let mut minimizer_sa: Vec<usize> = (0..minimizer_sequence.len()).collect();
-
-    // Sort based on suffixes of the minimizer sequence
-    minimizer_sa.sort_by(|idx1, idx2| {
-        // Compare the suffixes of the minimizer_sequence starting at *idx1* and *idx2*
-        (&minimizer_sequence[*idx1..]).cmp(&minimizer_sequence[*idx2..])
     });
 
     // Store the new data structure
     let minimizer_string_data = MinimizerStringData {
-        reference: original_reference,
-        minimizer_sequence,
-        minimizer_to_genome_pos,
-        minimizer_sa,
+        reference: original_reference, // Store original reference for querying
+        minimizer_sequence, // Stores original genome positions
+        minimizer_sa, // Indices into minimizer_sequence
         minimizer_k,
         window_w,
     };
@@ -111,11 +91,11 @@ fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &s
         .expect("writing the data to the output file failed!");
 
     println!("Minimizer-space suffix array built successfully!");
-    println!("Minimizer sequence length: {}", minimizer_string_data.minimizer_sequence.len());
+    println!("Original sequence length: {}", minimizer_string_data.reference.len());
+    println!("Minimizer sequence length (indices stored): {}", minimizer_string_data.minimizer_sequence.len());
     println!("Minimizer k: {}", minimizer_k);
     println!("Window w: {}", window_w);
 }
-
 fn main() {
     let args: Vec<String> = env::args().collect();
 

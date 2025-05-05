@@ -2,10 +2,9 @@ use std::env;
 use std::fs::File;
 use std::cmp::Ordering;
 use std::io::{BufRead, BufReader, Read, Write};
-use minimizer_sa::shared::MinimizerStringData;
+use minimizer_sa::shared::{MinimizerStringData, compute_minimizers};
 
 
-// get_data to load MinimizerStringData
 fn get_data(index: &str) -> MinimizerStringData {
     let mut file = File::open(index).expect("failed to open the index file!");
     let mut buffer = Vec::new();
@@ -15,67 +14,72 @@ fn get_data(index: &str) -> MinimizerStringData {
     bincode::deserialize(&buffer).expect("failed to deserialize the index data!")
 }
 
-// Function to compute the minimizer sequence for a query pattern
-// (Similar to the builder's compute_minimizers, but only returns the sequence)
-fn compute_minimizers_for_query(sequence: &str, k: usize, w: usize) -> Vec<String> {
-    let mut minimizer_seq = Vec::new();
 
-    // Process the sequence
-    let effective_len = sequence.len();
-
-    if effective_len < k {
-        return minimizer_seq; // Sequence too short to form a k-mer
-    }
-
-    for i in 0..=(effective_len.saturating_sub(w)) {
-        let window = &sequence[i..std::cmp::min(i + w, effective_len)];
-
-         if window.len() < k {
-            break; // Window too short for k-mer
-        }
-
-        let mut min_kmer: Option<&str> = None;
-
-        for j in 0..=(window.len().saturating_sub(k)) {
-            let current_kmer = &window[j..j + k];
-
-            match min_kmer {
-                None => {
-                    min_kmer = Some(current_kmer);
-                }
-                Some(existing_min) => {
-                    if current_kmer.cmp(existing_min) < Ordering::Less {
-                        min_kmer = Some(current_kmer);
-                    }
-                }
-            }
-        }
-
-        if let Some(minimizer) = min_kmer {
-            minimizer_seq.push(minimizer.to_string());
-        }
-    }
-
-    minimizer_seq
-}
-
-// Helper function to create a "terminal minimizer" sequence for upper bound search
 fn create_terminal_minimizer_pattern(k: usize) -> Vec<String> {
     // A single k-mer string of '{' characters, which is lexicographically
     // greater than any k-mer composed of A, C, G, T.
-    let terminal_kmer = "{".repeat(k);
+    let terminal_kmer: String = "{".repeat(k);
     vec![terminal_kmer]
 }
 
 
-// bin_search to work on the minimizer sequence
-// This function finds the lower bound index in the minimizer_sa for a given pattern (sequence of minimizers)
+// Helper function to compare two sequences of minimizer original positions
+// by extracting and comparing the actual k-mer strings from their respective original sequences.
+fn compare_minimizer_sequences(
+    seq1_indices: &[usize], // Slice of original positions for sequence 1 (e.g., reference suffix)
+    seq2_indices: &[usize], // Slice of original positions for sequence 2 (e.g., query pattern)
+    original_sequence1: &str, // The original DNA sequence for sequence 1 (e.g., original reference)
+    original_sequence2: &str, // The original DNA sequence for sequence 2 (e.g., original query)
+    k: usize, // Minimizer k-mer size
+) -> Ordering {
+    let mut idx1 = 0;
+    let mut idx2 = 0;
+
+    loop {
+        // Check if we've reached the end of either sequence of indices
+        let end_of_seq1 = idx1 >= seq1_indices.len();
+        let end_of_seq2 = idx2 >= seq2_indices.len();
+
+        match (end_of_seq1, end_of_seq2) {
+            (true, true) => return Ordering::Equal, // Both sequences end at the same time
+            (true, false) => return Ordering::Less, // Sequence 1 is a prefix of Sequence 2
+            (false, true) => return Ordering::Greater, // Sequence 2 is a prefix of Sequence 1
+            (false, false) => {
+                // Get the original positions for the current minimizers
+                let pos1 = seq1_indices[idx1];
+                let pos2 = seq2_indices[idx2];
+
+                // Extract the k-mer strings from their respective original sequences
+                // Ensure we don't go out of bounds when extracting k-mers
+                let kmer1 = &original_sequence1[pos1..(pos1 + k).min(original_sequence1.len())];
+                let kmer2 = &original_sequence2[pos2..(pos2 + k).min(original_sequence2.len())];
+
+                // Compare the k-mer strings
+                match kmer1.cmp(kmer2) {
+                    Ordering::Equal => {
+                        // K-mers are equal, continue to the next minimizer index
+                        idx1 += 1;
+                        idx2 += 1;
+                    }
+                    ordering => return ordering, // K-mers are different, return the comparison result
+                }
+            }
+        }
+    }
+}
+
+
+// Modified bin_search to work on sequences of original positions.
+// This function finds the lower bound index in the minimizer_sa for a given pattern (sequence of original positions).
 fn bin_search(
     left: usize,
     right: usize,
-    minimizer_sequence: &Vec<String>, // The reference minimizer sequence
-    minimizer_sa: &Vec<usize>,      // The suffix array on minimizers
-    pattern_minimizers: &Vec<String>, // The query minimizer sequence (pattern)
+    minimizer_sequence_indices: &Vec<usize>, // The reference minimizer sequence (original positions)
+    minimizer_sa: &Vec<usize>,      // The suffix array on minimizer_sequence_indices
+    pattern_minimizer_indices: &Vec<usize>, // The query minimizer sequence (original positions in query)
+    original_reference: &str, // Original reference sequence for k-mer extraction
+    original_query_sequence: &str, // Original query sequence for k-mer extraction
+    k: usize, // Minimizer k-mer size
 ) -> usize {
     let mut l = left;
     let mut r = right;
@@ -83,11 +87,18 @@ fn bin_search(
     while l < r {
         let m = l + (r - l) / 2; // Use this to prevent potential overflow
 
-        // Compare the suffix of the minimizer_sequence starting at minimizer_sa[m]
-        // with the pattern_minimizers sequence.
-        let suffix_in_minimizers = &minimizer_sequence[minimizer_sa[m]..];
+        // Get the slice of original positions for the suffix in the reference minimizer sequence
+        let suffix_in_minimizers_indices = &minimizer_sequence_indices[minimizer_sa[m]..];
 
-        match suffix_in_minimizers.cmp(pattern_minimizers) {
+        // Compare the suffix (sequence of indices from reference) with the pattern (sequence of indices from query)
+        // using the helper function to extract and compare k-mers from their respective original sequences.
+        match compare_minimizer_sequences(
+            suffix_in_minimizers_indices, // Indices from the reference minimizer sequence
+            pattern_minimizer_indices, // Indices from the query minimizer sequence
+            original_reference, // Use original reference for suffix k-mers
+            original_query_sequence, // Use original query for pattern k-mers
+            k,
+        ) {
             Ordering::Less => {
                 // Suffix is less than pattern, need to search in the right half
                 l = m + 1;
@@ -103,117 +114,95 @@ fn bin_search(
         }
     }
 
-    // l is now the lower bound (first index where the suffix is >= pattern)
+    // l is now the lower bound (first index in minimizer_sa where the suffix is >= pattern)
     l
 }
 
 
-// process_query to handle minimizer-space search, two binary searches, validation, and false positive rate calculation
+// Modified process_query to handle minimizer-space search and report all potential matches
+// Removed validation and false positive rate calculation.
 fn process_query(
     data: &MinimizerStringData,
-    original_reference: &str, // Need original reference for validation
     original_query_sequence: String, // The original query DNA sequence
     query_name: &str,
     output_file: &mut File,
 ) -> () {
-    // Transform the original query sequence into its minimizer sequence
-    let query_minimizers = compute_minimizers_for_query(
+    // Transform the original query sequence into its minimizer sequence (indices into query)
+    let query_minimizer_indices = compute_minimizers(
         &original_query_sequence,
         data.minimizer_k,
         data.window_w,
     );
 
     // If the query minimizer sequence is empty, it cannot match anything.
-    if query_minimizers.is_empty() {
-         let output_string = format!("{}\t0\t0.0", query_name); // Report 0 occurrences and 0.0 false positive rate
+    if query_minimizer_indices.is_empty() {
+         let output_string = format!("{}\t0", query_name); // Report 0 occurrences
          writeln!(output_file, "{}", output_string).expect("failed to write to the output file!");
          return;
     }
 
     // --- Find the range [l, r) in the minimizer_sa using two binary searches ---
 
-    // 1. Find the lower bound (l): First suffix >= query_minimizers
+    // 1. Find the lower bound (l): First suffix >= query_minimizer_indices
     let l = bin_search(
         0, // Search the entire minimizer_sa
         data.minimizer_sa.len(),
-        &data.minimizer_sequence,
+        &data.minimizer_sequence, // Reference minimizer indices
         &data.minimizer_sa,
-        &query_minimizers,
+        &query_minimizer_indices, // Query minimizer indices
+        &data.reference, // Original reference for comparisons
+        &original_query_sequence, // Original query for comparisons
+        data.minimizer_k,
     );
 
-    // 2. Find the upper bound (r): First suffix > query_minimizers
-    // Create a pattern that is lexicographically just after query_minimizers.
-    // We do this by appending a "terminal minimizer" to the query minimizer sequence.
-    let mut upper_bound_pattern = query_minimizers.clone();
-    let terminal_minimizer = create_terminal_minimizer_pattern(data.minimizer_k);
-    upper_bound_pattern.extend(terminal_minimizer); // Append the terminal minimizer pattern
+    // 2. Find the upper bound (r): First suffix > query_minimizer_indices
+    // We need to find the first suffix in the minimizer SA that is lexicographically
+    // strictly greater than the query minimizer sequence.
+    // This is equivalent to finding the lower bound of the "next" sequence after the query.
+    // Since we are comparing sequences of indices by looking up k-mers, the simplest
+    // way to find the upper bound is to iterate from 'l' and stop when the suffix
+    // no longer starts with the query minimizer sequence.
 
-    let r = bin_search(
-        l, // Can start searching from l for efficiency
-        data.minimizer_sa.len(),
-        &data.minimizer_sequence,
-        &data.minimizer_sa,
-        &upper_bound_pattern,
-    );
+    let mut r = l;
+    while r < data.minimizer_sa.len() {
+        // Get the slice of original positions for the suffix in the reference minimizer sequence
+        let suffix_in_minimizers_indices = &data.minimizer_sequence[data.minimizer_sa[r]..];
 
-    // Calculate the total number of potential matches found in minimizer space
-    let total_potential_matches = r.saturating_sub(l);
-
-    // --- Validate potential matches and report original genome positions ---
-
-    let mut true_match_positions: Vec<usize> = Vec::new();
-
-    // Iterate through the range [l, r) in the minimizer_sa
-    for i in l..r {
-        // Get the corresponding start position in the original genome
-        let potential_genome_pos_in_minimizers = data.minimizer_sa[i];
-
-        // Ensure the minimizer sequence match is long enough to correspond
-        // to a full query minimizer sequence. A match in the SA means the suffix
-        // starts with the query minimizer sequence. We need to check if the
-        // reference minimizer sequence at this position is at least as long
-        // as the query minimizer sequence.
-        if potential_genome_pos_in_minimizers + query_minimizers.len() <= data.minimizer_sequence.len() {
-
-            // Get the start position in the original genome corresponding to the
-            // beginning of this minimizer sequence match.
-            let original_genome_start_pos = data.minimizer_to_genome_pos[potential_genome_pos_in_minimizers];
-
-            // Perform validation: Check if the original reference sequence
-            // at this position matches the original query sequence.
-            // Ensure we don't go out of bounds in the original reference.
-            if original_genome_start_pos + original_query_sequence.len() <= original_reference.len() {
-                let reference_slice = &original_reference[original_genome_start_pos..(original_genome_start_pos + original_query_sequence.len())];
-
-                if reference_slice == original_query_sequence {
-                    // This is a true positive match in the original genome
-                    true_match_positions.push(original_genome_start_pos);
-                }
-            }
+        // Check if the suffix starts with the query minimizer sequence using k-mer comparison
+        // We compare the suffix slice with the full query minimizer index sequence.
+        // If the comparison is Ordering::Equal or Ordering::Greater, it means the suffix
+        // starts with or is equal to the query minimizer sequence. We want the first
+        // index where it is strictly greater.
+        // A simpler check is to see if the prefix of the suffix matches the query.
+        if suffix_in_minimizers_indices.len() >= query_minimizer_indices.len() &&
+           compare_minimizer_sequences(
+               &suffix_in_minimizers_indices[0..query_minimizer_indices.len()], // Compare prefix of suffix
+               &query_minimizer_indices, // with the full query sequence
+               &data.reference, // Use original reference for suffix k-mers
+               &original_query_sequence, // Use original query for pattern k-mers
+               data.minimizer_k
+           ) == Ordering::Equal
+        {
+            r += 1; // The suffix starts with the query, continue
+        } else {
+            break; // Suffix no longer starts with the query
         }
     }
 
-    // Calculate the number of false positives
-    let num_true_matches = true_match_positions.len();
-    let num_false_positives = total_potential_matches.saturating_sub(num_true_matches);
 
-    // Calculate the false positive rate
-    let false_positive_rate = if total_potential_matches > 0 {
-        num_false_positives as f64 / total_potential_matches as f64
-    } else {
-        0.0
-    };
+    // --- Report potential matches found in minimizer space ---
 
+    let potential_match_positions: Vec<usize> = (l..r)
+        .map(|i| data.minimizer_sequence[data.minimizer_sa[i]]) // Get the original genome position
+        .collect();
 
     // Output the results
     let mut output_string = String::new();
     output_string.push_str(query_name);
     output_string.push_str("\t");
-    output_string.push_str(&num_true_matches.to_string()); // Report the count of true matches
-    output_string.push_str("\t");
-    output_string.push_str(&format!("{:.4}", false_positive_rate)); // Report false positive rate, formatted to 4 decimal places
+    output_string.push_str(&potential_match_positions.len().to_string()); // Report the count of potential matches
 
-    for pos in true_match_positions {
+    for pos in potential_match_positions {
         output_string.push_str("\t");
         output_string.push_str(&pos.to_string()); // Report the original genome positions
     }
@@ -221,12 +210,10 @@ fn process_query(
     writeln!(output_file, "{}", output_string).expect("failed to write to the output file!");
 }
 
+// Modified querysa function
 fn querysa(index: &str, queries: &str, output: &str) -> () {
     // get the serialized reference data
     let data = get_data(index);
-
-    // We need the original reference sequence for validation.
-    let original_reference = &data.reference;
 
     // open the queries file
     let file = File::open(queries).expect("queries file couldn't be opened!!");
@@ -247,9 +234,9 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
                 if num_records > 0 {
                     curr_sequence = curr_sequence_vec.join("");
                     curr_sequence_vec.clear();
+                    // Call process_query
                     process_query(
                         &data,
-                        &original_reference, // Pass the original reference for validation
                         curr_sequence,
                         &curr_query,
                         &mut output_file,
@@ -269,13 +256,11 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
     curr_sequence_vec.clear();
     process_query(
         &data,
-        &original_reference, // Pass the original reference for validation
         curr_sequence,
         &curr_query,
         &mut output_file,
     );
 }
-
 fn main() {
     let args: Vec<String> = env::args().collect();
 
