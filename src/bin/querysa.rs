@@ -126,7 +126,7 @@ fn process_query(
 
     for pos in potential_match_positions {
         output_string.push_str("\t");
-        output_string.push_str(&pos.to_string()); // original genome positions
+        output_string.push_str(&((pos - query_minimizer_indices[0]).to_string())); // original genome positions
     }
 
     writeln!(output_file, "{}", output_string).expect("failed to write to the output file!");

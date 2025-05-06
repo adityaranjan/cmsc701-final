@@ -40,7 +40,7 @@ pub fn compute_minimizers(sequence: &str, k: usize, w: usize) -> Vec<usize> {
                     min_kmer_start_in_window = j;
                 }
                 Some(existing_min) => {
-                    if current_kmer.cmp(existing_min) < Ordering::Less {
+                    if current_kmer < existing_min {
                         min_kmer_in_window = Some(current_kmer);
                         min_kmer_start_in_window = j;
                     }
