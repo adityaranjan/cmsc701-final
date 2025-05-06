@@ -25,7 +25,7 @@ fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &s
              &minimizer_sequence[..],
              &original_reference, 
              &original_reference, 
-             minimizer_k
+             minimizer_k,
         )
     });
 

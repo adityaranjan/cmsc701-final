@@ -79,7 +79,7 @@ pub fn compare_minimizer_sequences(
     seq2_indices: &[usize],
     original_sequence1: &str,
     original_sequence2: &str,
-    k: usize,
+    k: usize
 ) -> Ordering {
     let mut idx1 = start_idx1.unwrap_or(0);
     let mut idx2 = start_idx2.unwrap_or(0);

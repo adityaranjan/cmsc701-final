@@ -112,6 +112,10 @@ fn process_query(
         data.minimizer_k,
     );
 
+    // reverse modification made to original query sequence and query minimizer indices
+    original_query_sequence.truncate(original_query_sequence.len() - &data.minimizer_k);
+    query_minimizer_indices.pop();
+
     // potential matches found in minimizer space
 
     let potential_match_positions: Vec<usize> = (l..r)
@@ -119,15 +123,25 @@ fn process_query(
         .collect();
 
     // Output the results
+    let mut potential_match_ct = 0;
     let mut output_string = String::new();
-    output_string.push_str(query_name);
-    output_string.push_str("\t");
-    output_string.push_str(&potential_match_positions.len().to_string()); // count of potential matches
 
     for pos in potential_match_positions {
+        if (pos < query_minimizer_indices[0]) || (pos + (original_query_sequence.len() - query_minimizer_indices[0]) >= data.reference.len()) {
+            // match isn't valid since the query goes out of bounds
+            // even though the minimizers align with the reference
+            continue;
+        }
+
+        potential_match_ct += 1;
+
         output_string.push_str("\t");
         output_string.push_str(&((pos - query_minimizer_indices[0]).to_string())); // original genome positions
     }
+
+    output_string.insert_str(0, &potential_match_ct.to_string());
+    output_string.insert_str(0, "\t");
+    output_string.insert_str(0, query_name);
 
     writeln!(output_file, "{}", output_string).expect("failed to write to the output file!");
 }
@@ -180,6 +194,7 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
         &mut output_file,
     );
 }
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
