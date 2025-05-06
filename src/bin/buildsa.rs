@@ -6,10 +6,14 @@ use minimizer_sa::shared::{MinimizerStringData, compute_minimizers, compare_mini
 
 // buildsa function to work on minimizers
 fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str) -> () {
-    let original_reference = get_reference(reference_path);
+    let mut original_reference = get_reference(reference_path);
 
     // Compute the minimizer sequence, which is now a vector of original genome positions.
-    let minimizer_sequence = compute_minimizers(&original_reference, minimizer_k, window_w);
+    let mut minimizer_sequence = compute_minimizers(&original_reference, minimizer_k, window_w);
+
+    // add terminal k-mer to original_reference and correspnding index to minimizer_sequence
+    original_reference.push_str(&"$".repeat(minimizer_k));
+    minimizer_sequence.push(original_reference.len() - minimizer_k);
 
     // Build the suffix array on the minimizer_sequence (Vec<usize> of original positions).
     // The indices in minimizer_sa will point into the minimizer_sequence vector.

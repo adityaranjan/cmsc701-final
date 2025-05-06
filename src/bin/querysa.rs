@@ -46,14 +46,18 @@ fn bin_search(
         ) {
             Ordering::Less => {
                 // Suffix is less than pattern, need to search in the right half
-                l = m + 1;
+                if m == r - 1 {
+                    return r;
+                }
+    
+                l = m;
             }
-            Ordering::Equal => {
-                // Found a match, but it might not be the first. Search in the left half for the lower bound.
-                r = m;
-            }
-            Ordering::Greater => {
+            _ => {
                 // Suffix is greater than pattern, need to search in the left half
+                if m == l + 1 {
+                    return m;
+                }
+    
                 r = m;
             }
         }
@@ -76,6 +80,10 @@ fn process_query(
         data.window_w,
     );
 
+    // to find lower bound, add a "#" k-mer
+    original_query_sequence.push_str(&"#".repeat(data.minimizer_k));
+    query_minimizer_indices.push(original_query_sequence.len() - data.minimizer_k);
+
     // Find the lower bound: First suffix >= query_minimizer_indices
     let l = bin_search(
         0, // Search the entire minimizer_sa
@@ -88,8 +96,12 @@ fn process_query(
         data.minimizer_k,
     );
 
-    // add terminal minimizer to query
-    original_query_sequence.push_str(&"{".repeat(data.minimizer_k));
+    // reverse modification made to original query sequence and query minimizer indices
+    original_query_sequence.truncate(original_query_sequence.len() - &data.minimizer_k);
+    query_minimizer_indices.pop();
+
+    // to find upper bound, add a "}" k-mer
+    original_query_sequence.push_str(&"}".repeat(data.minimizer_k));
     query_minimizer_indices.push(original_query_sequence.len() - data.minimizer_k);
 
     // Find the upper bound: First suffix > query_minimizer_indices
@@ -119,9 +131,12 @@ fn process_query(
     let mut output_string = String::new();
 
     for pos in potential_match_positions {
-        if (pos < query_minimizer_indices[0]) || (pos + (original_query_sequence.len() - query_minimizer_indices[0]) >= data.reference.len()) {
+        if (pos < query_minimizer_indices[0]) ||
+           (pos + (original_query_sequence.len() - query_minimizer_indices[0] - 1) >= data.reference.len() - data.minimizer_k) {
             // match isn't valid since the query goes out of bounds
             // even though the minimizers align with the reference
+            // note that second condition subtracts minimizer_k to account
+            // for the fact that we added a terminal "$" k-mer to the original reference
             continue;
         }
 
