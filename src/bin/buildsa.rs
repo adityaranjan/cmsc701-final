@@ -5,7 +5,8 @@ use minimizer_sa::shared::{MinimizerStringData, compute_minimizers, compare_mini
 
 
 // buildsa function to work on minimizers
-fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str) -> () {    let original_reference = get_reference(reference_path);
+fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str) -> () {
+    let original_reference = get_reference(reference_path);
 
     // Compute the minimizer sequence, which is now a vector of original genome positions.
     let minimizer_sequence = compute_minimizers(&original_reference, minimizer_k, window_w);

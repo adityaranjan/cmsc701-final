@@ -14,14 +14,6 @@ fn get_data(index: &str) -> MinimizerStringData {
     bincode::deserialize(&buffer).expect("failed to deserialize the index data!")
 }
 
-
-fn create_terminal_minimizer_pattern(k: usize) -> String {
-    // A single k-mer string of '{' characters, which is lexicographically
-    // greater than any k-mer composed of A, C, G, T.
-    "{".repeat(k)
-}
-
-
 // Modified bin_search to work on sequences of original positions.
 fn bin_search(
     left: usize,
@@ -97,7 +89,7 @@ fn process_query(
     );
 
     // add terminal minimizer to query
-    original_query_sequence.push_str(&create_terminal_minimizer_pattern(data.minimizer_k));
+    original_query_sequence.push_str(&"{".repeat(data.minimizer_k));
     query_minimizer_indices.push(original_query_sequence.len() - data.minimizer_k);
 
     // Find the upper bound: First suffix > query_minimizer_indices
