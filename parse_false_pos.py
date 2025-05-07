@@ -10,19 +10,19 @@ def parse_file(filename, skip_columns):
     return result
 
 def compare_lists(list1, list2):
-    total_false_negatives = 0
+    total_false_positives = 0
     # Iterate through both lists simultaneously using zip
     for set1, set2 in zip(list1, list2):
-        # Calculate false negatives: elements in set1 that are NOT in set2
-        # Set difference (set1 - set2) gives exactly these elements
-        false_negatives_at_index = set1 - set2
-        # Add the count of false negatives for this index to the total
-        total_false_negatives += len(false_negatives_at_index)
+        # Calculate false positives: elements in set2 that are NOT in set1
+        # Set difference (set2 - set1) gives exactly these elements
+        false_positives_at_index = set2 - set1
+        # Add the count of false positives for this index to the total
+        total_false_positives += len(false_positives_at_index)
 
-    # Calculate the average false negatives per query (index)
-    average_false_negatives = total_false_negatives / len(list1)
+    # Calculate the average false positives per query (index)
+    average_false_positives = total_false_positives / len(list1)
 
-    return average_false_negatives
+    return average_false_positives
 
 
 if __name__ == "__main__":
@@ -38,4 +38,4 @@ if __name__ == "__main__":
 
     mismatches = compare_lists(list1, list2)
 
-    print(f"Average # of false negatives per query: {mismatches}")
+    print(f"Average # of false positives per query: {mismatches}")
