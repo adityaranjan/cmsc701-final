@@ -29,13 +29,9 @@ if __name__ == "__main__":
 
     mismatches = compare_lists(list1, list2)
 
-    print(len(mismatches))
-
-    """
     if mismatches:
         print("Indices where file2 does NOT fully contain file1's extra values:")
         for idx in mismatches:
             print(f"Line {idx}")
     else:
         print("All lines in file2 fully contain the extra values from file1.")
-    """

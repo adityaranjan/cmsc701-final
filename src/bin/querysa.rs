@@ -1,9 +1,8 @@
+use minimizer_sa::shared::{compare_minimizer_sequences, compute_minimizers, MinimizerStringData};
+use std::cmp::Ordering;
 use std::env;
 use std::fs::File;
-use std::cmp::Ordering;
 use std::io::{BufRead, BufReader, Read, Write};
-use minimizer_sa::shared::{MinimizerStringData, compute_minimizers, compare_minimizer_sequences};
-
 
 fn get_data(index: &str) -> MinimizerStringData {
     let mut file = File::open(index).expect("failed to open the index file!");
@@ -49,7 +48,7 @@ fn bin_search(
                 if m == r - 1 {
                     return r;
                 }
-    
+
                 l = m;
             }
             _ => {
@@ -57,7 +56,7 @@ fn bin_search(
                 if m == l + 1 {
                     return m;
                 }
-    
+
                 r = m;
             }
         }
@@ -66,7 +65,6 @@ fn bin_search(
     l
 }
 
-
 fn process_query(
     data: &MinimizerStringData,
     mut original_query_sequence: String,
@@ -74,11 +72,8 @@ fn process_query(
     output_file: &mut File,
 ) -> () {
     // Transform the original query sequence into its minimizer sequence (indices into query)
-    let mut query_minimizer_indices = compute_minimizers(
-        &original_query_sequence,
-        data.minimizer_k,
-        data.window_w,
-    );
+    let mut query_minimizer_indices =
+        compute_minimizers(&original_query_sequence, data.minimizer_k, data.window_w);
 
     // to find lower bound, add a "#" k-mer
     original_query_sequence.push_str(&"#".repeat(data.minimizer_k));
@@ -123,7 +118,7 @@ fn process_query(
     // potential matches found in minimizer space
 
     let potential_match_positions: Vec<usize> = (l..r)
-        .map(|i| data.minimizer_sequence[data.minimizer_sa[i]]) 
+        .map(|i| data.minimizer_sequence[data.minimizer_sa[i]])
         .collect();
 
     // Output the results
@@ -131,8 +126,10 @@ fn process_query(
     let mut output_string = String::new();
 
     for pos in potential_match_positions {
-        if (pos < query_minimizer_indices[0]) ||
-           (pos + (original_query_sequence.len() - query_minimizer_indices[0] - 1) >= data.reference.len() - data.minimizer_k) {
+        if (pos < query_minimizer_indices[0])
+            || (pos + (original_query_sequence.len() - query_minimizer_indices[0] - 1)
+                >= data.reference.len() - data.minimizer_k)
+        {
             // match isn't valid since the query goes out of bounds
             // even though the minimizers align with the reference
             // note that second condition subtracts minimizer_k to account
@@ -143,7 +140,8 @@ fn process_query(
         potential_match_ct += 1;
 
         output_string.push_str("\t");
-        output_string.push_str(&((pos - query_minimizer_indices[0]).to_string())); // original genome positions
+        output_string.push_str(&((pos - query_minimizer_indices[0]).to_string()));
+        // original genome positions
     }
 
     output_string.insert_str(0, &potential_match_ct.to_string());
@@ -175,12 +173,7 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
                     curr_sequence = curr_sequence_vec.join("");
                     curr_sequence_vec.clear();
 
-                    process_query(
-                        &data,
-                        curr_sequence,
-                        &curr_query,
-                        &mut output_file,
-                    );
+                    process_query(&data, curr_sequence, &curr_query, &mut output_file);
                 }
 
                 curr_query = (&line[1..]).to_string();
@@ -194,19 +187,17 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
     // Process the last query
     curr_sequence = curr_sequence_vec.join("");
     curr_sequence_vec.clear();
-    process_query(
-        &data,
-        curr_sequence,
-        &curr_query,
-        &mut output_file,
-    );
+    process_query(&data, curr_sequence, &curr_query, &mut output_file);
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 4 {
-        eprintln!("Usage: {} <index_path> <queries_path> <output_path>", args[0]);
+        eprintln!(
+            "Usage: {} <index_path> <queries_path> <output_path>",
+            args[0]
+        );
         return;
     }
 

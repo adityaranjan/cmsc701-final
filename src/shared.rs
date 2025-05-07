@@ -1,8 +1,7 @@
-use std::fs::File;
-use std::cmp::Ordering;
-use std::io::{BufRead, BufReader};
 use serde::{Deserialize, Serialize};
-
+use std::cmp::Ordering;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 #[derive(Serialize, Deserialize)]
 pub struct MinimizerStringData {
@@ -10,7 +9,7 @@ pub struct MinimizerStringData {
     pub minimizer_sequence: Vec<usize>, // stores minimizer indices in original genome sequence
     pub minimizer_sa: Vec<usize>, // suffix array for minimizer sequence
     pub minimizer_k: usize, // k for minimizers
-    pub window_w: usize, // w for minimizers
+    pub window_w: usize,   // w for minimizers
 }
 
 // Function to compute the minimizer sequence (indices into original sequence)
@@ -48,23 +47,20 @@ pub fn compute_minimizers(sequence: &str, k: usize, w: usize) -> Vec<usize> {
             }
         }
 
-        if let Some(minimizer_kmer) = min_kmer_in_window {
-            let current_minimizer_original_pos = i + min_kmer_start_in_window;
+        let current_minimizer_original_pos = i + min_kmer_start_in_window;
 
-            let should_add = match last_added_minimizer_original_pos {
-                None => true, // Always add the first minimizer found
-                Some(last_pos) => {
-                    // Extract the k-mer string for the last added minimizer
-                    let last_kmer = &sequence[last_pos..(last_pos + k)];
-                    // Collapse duplicates: add if the current minimizer k-mer is different from the last added k-mer
-                    minimizer_kmer != last_kmer
-                }
-            };
-
-            if should_add {
-                minimizer_original_positions.push(current_minimizer_original_pos);
-                last_added_minimizer_original_pos = Some(current_minimizer_original_pos);
+        let should_add = match last_added_minimizer_original_pos {
+            None => true, // add the first minimizer found
+            Some(last_pos) => {
+                // Collapse duplicates
+                // add if the index at which the minimizer was found is different
+                current_minimizer_original_pos != last_pos
             }
+        };
+
+        if should_add {
+            minimizer_original_positions.push(current_minimizer_original_pos);
+            last_added_minimizer_original_pos = Some(current_minimizer_original_pos);
         }
     }
 
@@ -79,7 +75,7 @@ pub fn compare_minimizer_sequences(
     seq2_indices: &[usize],
     original_sequence1: &str,
     original_sequence2: &str,
-    k: usize
+    k: usize,
 ) -> Ordering {
     let mut idx1 = start_idx1.unwrap_or(0);
     let mut idx2 = start_idx2.unwrap_or(0);

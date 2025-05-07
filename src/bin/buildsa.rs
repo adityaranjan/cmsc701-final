@@ -1,8 +1,9 @@
+use minimizer_sa::shared::{
+    compare_minimizer_sequences, compute_minimizers, get_reference, MinimizerStringData,
+};
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use minimizer_sa::shared::{MinimizerStringData, compute_minimizers, compare_minimizer_sequences, get_reference};
-
 
 // buildsa function to work on minimizers
 fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str) -> () {
@@ -26,11 +27,11 @@ fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &s
         compare_minimizer_sequences(
             Some(*idx1),
             Some(*idx2),
-             &minimizer_sequence[..], 
-             &minimizer_sequence[..],
-             &original_reference, 
-             &original_reference, 
-             minimizer_k,
+            &minimizer_sequence[..],
+            &minimizer_sequence[..],
+            &original_reference,
+            &original_reference,
+            minimizer_k,
         )
     });
 
@@ -50,8 +51,14 @@ fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &s
         .expect("writing the data to the output file failed!");
 
     println!("Minimizer-space suffix array built successfully!");
-    println!("Original sequence length: {}", minimizer_string_data.reference.len());
-    println!("Minimizer sequence length (indices stored): {}", minimizer_string_data.minimizer_sequence.len());
+    println!(
+        "Original sequence length: {}",
+        minimizer_string_data.reference.len()
+    );
+    println!(
+        "Minimizer sequence length (indices stored): {}",
+        minimizer_string_data.minimizer_sequence.len()
+    );
     println!("Minimizer k: {}", minimizer_k);
     println!("Window w: {}", window_w);
 }
@@ -59,7 +66,10 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 5 {
-        eprintln!("Usage: {} <reference_path> <minimizer_k> <window_w> <output_path>", args[0]);
+        eprintln!(
+            "Usage: {} <reference_path> <minimizer_k> <window_w> <output_path>",
+            args[0]
+        );
         return;
     }
 
