@@ -24,9 +24,9 @@ def compare_lists(list1, list2):
 
     # Calculate the average false positives per query (index)
     average_false_positives = total_false_positives / len(list1)
-    average_query_with_false_positive = total_queries_with_false_positive/ len(list1)
+    proportion_query_with_false_positive = total_queries_with_false_positive/ len(list1)
 
-    return average_false_positives, average_query_with_false_positive
+    return average_false_positives, proportion_query_with_false_positive
 
 
 if __name__ == "__main__":
@@ -43,4 +43,4 @@ if __name__ == "__main__":
     mismatches, rate = compare_lists(list1, list2)
 
     print(f"Average # of false positives per query: {mismatches}")
-    print(f"Average # of queries with false positive: {rate}")
+    print(f"Proportion of queries with false positive: {rate}")

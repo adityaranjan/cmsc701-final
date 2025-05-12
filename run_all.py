@@ -1,5 +1,3 @@
-
-
 import subprocess
 import time
 import os
@@ -64,7 +62,7 @@ for w in range(4, 12):
             capture_output=True, text=True, check=True
         )
         fp = float(re.search(r"Average # of false positives per query: ([0-9.]+)", pos_proc.stdout).group(1))
-        fpr = float(re.search(r"Average # of queries with false positive: ([0-9.]+)", pos_proc.stdout).group(1))
+        fpr = float(re.search(r"Proportion of queries with false positive: ([0-9.]+)", pos_proc.stdout).group(1))
 
         # Fill result cell
         cell = f"R={reduction:.3f}, BT={build_time:.2f}s, QT={query_time:.2f}s, FS={index_size//1024}KB, FN={fn:.3f}, FP={fp:.3f}, FPR={fpr:.3f}"
