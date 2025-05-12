@@ -25,7 +25,7 @@ for w in range(4, 12):
         # Run build command and time it
         build_cmd = [
             "cargo", "run", "--bin", "buildsa", reference_path,
-            str(k), str(w), build_output
+            str(k), str(w), build_output, "LexMax"
         ]
         start_build = time.time()
         build_proc = subprocess.run(build_cmd, capture_output=True, text=True)

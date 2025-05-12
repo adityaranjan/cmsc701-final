@@ -73,7 +73,7 @@ fn process_query(
 ) -> () {
     // Transform the original query sequence into its minimizer sequence (indices into query)
     let mut query_minimizer_indices =
-        compute_minimizers(&original_query_sequence, data.minimizer_k, data.window_w);
+        compute_minimizers(&original_query_sequence, data.minimizer_k, data.window_w, data.minimizer_type);
 
     // to find lower bound, add a "#" k-mer
     original_query_sequence.push_str(&"#".repeat(data.minimizer_k));

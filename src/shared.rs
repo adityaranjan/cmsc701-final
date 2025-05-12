@@ -3,6 +3,12 @@ use std::cmp::Ordering;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub enum MinimizerType {
+    LexMin,
+    LexMax
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct MinimizerStringData {
     pub reference: String, // Store original reference for validation during querying
@@ -10,11 +16,12 @@ pub struct MinimizerStringData {
     pub minimizer_sa: Vec<usize>, // suffix array for minimizer sequence
     pub minimizer_k: usize, // k for minimizers
     pub window_w: usize,   // w for minimizers
+    pub minimizer_type: MinimizerType, // type of minimizer
 }
 
 // Function to compute the minimizer sequence (indices into original sequence)
 // also collapses consecutive duplicate minimizers
-pub fn compute_minimizers(sequence: &str, k: usize, w: usize) -> Vec<usize> {
+pub fn compute_minimizers(sequence: &str, k: usize, w: usize, minimizer_type: MinimizerType) -> Vec<usize> {
     let mut minimizer_original_positions: Vec<usize> = Vec::new();
 
     let effective_len = sequence.len();
@@ -39,9 +46,21 @@ pub fn compute_minimizers(sequence: &str, k: usize, w: usize) -> Vec<usize> {
                     min_kmer_start_in_window = j;
                 }
                 Some(existing_min) => {
-                    if current_kmer < existing_min {
-                        min_kmer_in_window = Some(current_kmer);
-                        min_kmer_start_in_window = j;
+                    match minimizer_type {
+                        MinimizerType::LexMin => {
+                            // lexicographically smallest
+                            if current_kmer < existing_min {
+                                min_kmer_in_window = Some(current_kmer);
+                                min_kmer_start_in_window = j;
+                            }
+                        }
+                        MinimizerType::LexMax => {
+                            // lexicographically largest
+                            if current_kmer > existing_min {
+                                min_kmer_in_window = Some(current_kmer);
+                                min_kmer_start_in_window = j;
+                            }
+                        }
                     }
                 }
             }

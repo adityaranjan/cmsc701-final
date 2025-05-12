@@ -1,16 +1,22 @@
 use minimizer_sa::shared::{
-    compare_minimizer_sequences, compute_minimizers, get_reference, MinimizerStringData,
+    compare_minimizer_sequences, compute_minimizers, get_reference, MinimizerStringData, MinimizerType
 };
 use std::env;
 use std::fs::File;
 use std::io::Write;
 
 // buildsa function to work on minimizers
-fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str) -> () {
+fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str, minimizer_type: &str) -> () {
+    let min_type = match minimizer_type {
+        "LexMin" => MinimizerType::LexMin,
+        "LexMax" => MinimizerType::LexMax,
+        _ => panic!("Invalid minimizer type!"),
+    };
+
     let mut original_reference = get_reference(reference_path);
 
     // Compute the minimizer sequence, which is now a vector of original genome positions.
-    let mut minimizer_sequence = compute_minimizers(&original_reference, minimizer_k, window_w);
+    let mut minimizer_sequence = compute_minimizers(&original_reference, minimizer_k, window_w, min_type);
 
     // add terminal k-mer to original_reference and correspnding index to minimizer_sequence
     original_reference.push_str(&"$".repeat(minimizer_k));
@@ -41,6 +47,7 @@ fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &s
         minimizer_sa,
         minimizer_k,
         window_w,
+        minimizer_type: min_type,
     };
 
     // Serialize and save
@@ -67,7 +74,7 @@ fn main() {
 
     if args.len() < 5 {
         eprintln!(
-            "Usage: {} <reference_path> <minimizer_k> <window_w> <output_path>",
+            "Usage: {} <reference_path> <minimizer_k> <window_w> <output_path> <minimizer_type>",
             args[0]
         );
         return;
@@ -79,6 +86,7 @@ fn main() {
     let window_w: usize = args[3].parse().expect("window_w must be an integer!");
 
     let output = &args[4];
+    let minimizer_type = &args[5];
 
-    buildsa(reference_path, minimizer_k, window_w, output);
+    buildsa(reference_path, minimizer_k, window_w, output, minimizer_type);
 }
