@@ -2,11 +2,15 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use twox_hash::XxHash64;
+
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum MinimizerType {
     LexMin,
-    LexMax
+    LexMax,
+    HashMin,
+    HashMax
 }
 
 #[derive(Serialize, Deserialize)]
@@ -31,10 +35,13 @@ pub fn compute_minimizers(sequence: &str, k: usize, w: usize, minimizer_type: Mi
 
     // Slide a window of size w
     for i in 0..=(effective_len.saturating_sub(w)) {
+
         let window = &sequence[i..(std::cmp::min(i + w, effective_len))];
 
         let mut min_kmer_in_window: Option<&str> = None;
         let mut min_kmer_start_in_window = 0; // Start position of minimizer relative to window start
+
+        let mut existing_hash = 0;
 
         // Find the lexicographically smallest k-mer in the current window
         for j in 0..=(window.len().saturating_sub(k)) {
@@ -44,6 +51,7 @@ pub fn compute_minimizers(sequence: &str, k: usize, w: usize, minimizer_type: Mi
                 None => {
                     min_kmer_in_window = Some(current_kmer);
                     min_kmer_start_in_window = j;
+                    existing_hash = XxHash64::oneshot(0, current_kmer.as_bytes());
                 }
                 Some(existing_min) => {
                     match minimizer_type {
@@ -59,6 +67,26 @@ pub fn compute_minimizers(sequence: &str, k: usize, w: usize, minimizer_type: Mi
                             if current_kmer > existing_min {
                                 min_kmer_in_window = Some(current_kmer);
                                 min_kmer_start_in_window = j;
+                            }
+                        }
+                        MinimizerType::HashMin => {
+                            // smallest hash
+                            let current_hash = XxHash64::oneshot(0, current_kmer.as_bytes());
+
+                            if current_hash < existing_hash {
+                                min_kmer_in_window = Some(current_kmer);
+                                min_kmer_start_in_window = j;
+                                existing_hash = current_hash;
+                            }
+                        }
+                        MinimizerType::HashMax => {
+                            // largest hash
+                            let current_hash = XxHash64::oneshot(0, current_kmer.as_bytes());
+
+                            if current_hash > existing_hash {
+                                min_kmer_in_window = Some(current_kmer);
+                                min_kmer_start_in_window = j;
+                                existing_hash = current_hash;
                             }
                         }
                     }

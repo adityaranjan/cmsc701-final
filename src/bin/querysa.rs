@@ -3,6 +3,8 @@ use std::cmp::Ordering;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
+use rand::Rng;
+
 
 fn get_data(index: &str) -> MinimizerStringData {
     let mut file = File::open(index).expect("failed to open the index file!");
@@ -70,6 +72,7 @@ fn process_query(
     mut original_query_sequence: String,
     query_name: &str,
     output_file: &mut File,
+    rng: &mut rand::rngs::ThreadRng,
 ) -> () {
     // Transform the original query sequence into its minimizer sequence (indices into query)
     let mut query_minimizer_indices =
@@ -137,6 +140,17 @@ fn process_query(
             continue;
         }
 
+        // check if the minimizer sequence in the reference matches the query
+        // for some small number of random positions
+
+        let random_index = rng.random_range(0..original_query_sequence.len());
+        let reference_pos = random_index + pos - query_minimizer_indices[0];
+
+        if &original_query_sequence[random_index..(random_index + 1)] != &data.reference[reference_pos..(reference_pos + 1)] {
+            // characters don't match
+            continue;
+        }
+
         potential_match_ct += 1;
 
         output_string.push_str("\t");
@@ -164,6 +178,8 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
     let mut curr_query = String::new();
     let mut curr_sequence_vec: Vec<String> = Vec::new();
 
+    let mut rng = rand::rng();
+
     for line in reader.lines() {
         let line = line.expect("failed to read the line!");
 
@@ -173,7 +189,7 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
                     curr_sequence = curr_sequence_vec.join("");
                     curr_sequence_vec.clear();
 
-                    process_query(&data, curr_sequence, &curr_query, &mut output_file);
+                    process_query(&data, curr_sequence, &curr_query, &mut output_file, &mut rng);
                 }
 
                 curr_query = (&line[1..]).to_string();
@@ -187,7 +203,7 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
     // Process the last query
     curr_sequence = curr_sequence_vec.join("");
     curr_sequence_vec.clear();
-    process_query(&data, curr_sequence, &curr_query, &mut output_file);
+    process_query(&data, curr_sequence, &curr_query, &mut output_file, &mut rng);
 }
 
 fn main() {

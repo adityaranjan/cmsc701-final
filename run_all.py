@@ -4,9 +4,9 @@ import os
 import re
 import csv
 
-reference_path = "data/test_input/salmonella_sub.fa"
+reference_path = "data/test_input/salmonella.fa"
 reads_path = "data/test_input/reads_sal_sub.fq"
-naive_map_path = "data/test_output/sal_sub_reads.naive.map"
+naive_map_path = "data/test_output/salmonella.naive.map"
 output_csv = "data/results/results.csv"
 
 os.makedirs("data", exist_ok=True)
@@ -25,7 +25,7 @@ for w in range(4, 12):
         # Run build command and time it
         build_cmd = [
             "cargo", "run", "--bin", "buildsa", reference_path,
-            str(k), str(w), build_output, "LexMax"
+            str(k), str(w), build_output, "LexMin"
         ]
         start_build = time.time()
         build_proc = subprocess.run(build_cmd, capture_output=True, text=True)

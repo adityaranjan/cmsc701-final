@@ -10,6 +10,8 @@ fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &s
     let min_type = match minimizer_type {
         "LexMin" => MinimizerType::LexMin,
         "LexMax" => MinimizerType::LexMax,
+        "HashMin" => MinimizerType::HashMin,
+        "HashMax" => MinimizerType::HashMax,
         _ => panic!("Invalid minimizer type!"),
     };
 
