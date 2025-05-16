@@ -4,13 +4,12 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use twox_hash::XxHash64;
 
-
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum MinimizerType {
     LexMin,
     LexMax,
     HashMin,
-    HashMax
+    HashMax,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -25,7 +24,12 @@ pub struct MinimizerStringData {
 
 // Function to compute the minimizer sequence (indices into original sequence)
 // also collapses consecutive duplicate minimizers
-pub fn compute_minimizers(sequence: &str, k: usize, w: usize, minimizer_type: MinimizerType) -> Vec<usize> {
+pub fn compute_minimizers(
+    sequence: &str,
+    k: usize,
+    w: usize,
+    minimizer_type: MinimizerType,
+) -> Vec<usize> {
     let mut minimizer_original_positions: Vec<usize> = Vec::new();
 
     let effective_len = sequence.len();
@@ -35,7 +39,6 @@ pub fn compute_minimizers(sequence: &str, k: usize, w: usize, minimizer_type: Mi
 
     // Slide a window of size w
     for i in 0..=(effective_len.saturating_sub(w)) {
-
         let window = &sequence[i..(std::cmp::min(i + w, effective_len))];
 
         let mut min_kmer_in_window: Option<&str> = None;

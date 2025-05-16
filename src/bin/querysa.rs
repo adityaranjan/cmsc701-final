@@ -5,7 +5,6 @@ use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
 
-
 fn get_data(index: &str) -> MinimizerStringData {
     let mut file = File::open(index).expect("failed to open the index file!");
     let mut buffer = Vec::new();
@@ -76,8 +75,12 @@ fn process_query(
     delta_check_ct: usize,
 ) -> () {
     // Transform the original query sequence into its minimizer sequence (indices into query)
-    let mut query_minimizer_indices =
-        compute_minimizers(&original_query_sequence, data.minimizer_k, data.window_w, data.minimizer_type);
+    let mut query_minimizer_indices = compute_minimizers(
+        &original_query_sequence,
+        data.minimizer_k,
+        data.window_w,
+        data.minimizer_type,
+    );
 
     // to find lower bound, add a "#" k-mer
     original_query_sequence.push_str(&"#".repeat(data.minimizer_k));
@@ -122,7 +125,12 @@ fn process_query(
     // potential matches found in minimizer space
 
     let potential_match_positions: Vec<(usize, usize)> = (l..r)
-        .map(|i| (data.minimizer_sequence[data.minimizer_sa[i]], data.minimizer_sa[i]))
+        .map(|i| {
+            (
+                data.minimizer_sequence[data.minimizer_sa[i]],
+                data.minimizer_sa[i],
+            )
+        })
         .collect();
 
     let mut query_delta = Vec::new();
@@ -150,7 +158,10 @@ fn process_query(
 
         // check if deltas of minimizer positions match
         for i in 0..std::cmp::min(delta_check_ct, query_delta.len()) {
-            if query_delta[i] != (data.minimizer_sequence[minimizer_seq_idx + i + 1] - data.minimizer_sequence[minimizer_seq_idx + i]) {
+            if query_delta[i]
+                != (data.minimizer_sequence[minimizer_seq_idx + i + 1]
+                    - data.minimizer_sequence[minimizer_seq_idx + i])
+            {
                 skip_iter = true;
                 break;
             }
@@ -185,7 +196,9 @@ fn process_query(
 
             let reference_pos = (i - 1) + pos - query_minimizer_indices[0];
 
-            if &original_query_sequence[(i - 1)..i] != &data.reference[reference_pos..(reference_pos + 1)] {
+            if &original_query_sequence[(i - 1)..i]
+                != &data.reference[reference_pos..(reference_pos + 1)]
+            {
                 skip_iter = true;
                 break;
             }
@@ -199,7 +212,8 @@ fn process_query(
         potential_match_ct += 1;
 
         output_string.push_str("\t");
-        output_string.push_str(&((pos - query_minimizer_indices[0]).to_string()));  // original genome position
+        output_string.push_str(&((pos - query_minimizer_indices[0]).to_string()));
+        // original genome position
     }
 
     output_string.insert_str(0, &potential_match_ct.to_string());
@@ -209,7 +223,13 @@ fn process_query(
     writeln!(output_file, "{}", output_string).expect("failed to write to the output file!");
 }
 
-fn querysa(index: &str, queries: &str, output: &str, partial_check_ct: usize, delta_check_ct: usize) -> () {
+fn querysa(
+    index: &str,
+    queries: &str,
+    output: &str,
+    partial_check_ct: usize,
+    delta_check_ct: usize,
+) -> () {
     let data = get_data(index);
 
     let file = File::open(queries).expect("queries file couldn't be opened!!");
@@ -231,7 +251,14 @@ fn querysa(index: &str, queries: &str, output: &str, partial_check_ct: usize, de
                     curr_sequence = curr_sequence_vec.join("");
                     curr_sequence_vec.clear();
 
-                    process_query(&data, curr_sequence, &curr_query, &mut output_file, partial_check_ct, delta_check_ct);
+                    process_query(
+                        &data,
+                        curr_sequence,
+                        &curr_query,
+                        &mut output_file,
+                        partial_check_ct,
+                        delta_check_ct,
+                    );
                 }
 
                 curr_query = (&line[1..]).to_string();
@@ -245,7 +272,14 @@ fn querysa(index: &str, queries: &str, output: &str, partial_check_ct: usize, de
     // Process the last query
     curr_sequence = curr_sequence_vec.join("");
     curr_sequence_vec.clear();
-    process_query(&data, curr_sequence, &curr_query, &mut output_file, partial_check_ct, delta_check_ct);
+    process_query(
+        &data,
+        curr_sequence,
+        &curr_query,
+        &mut output_file,
+        partial_check_ct,
+        delta_check_ct,
+    );
 }
 
 fn main() {

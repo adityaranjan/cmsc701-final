@@ -1,12 +1,19 @@
 use minimizer_sa::shared::{
-    compare_minimizer_sequences, compute_minimizers, get_reference, MinimizerStringData, MinimizerType
+    compare_minimizer_sequences, compute_minimizers, get_reference, MinimizerStringData,
+    MinimizerType,
 };
 use std::env;
 use std::fs::File;
 use std::io::Write;
 
 // buildsa function to work on minimizers
-fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &str, minimizer_type: &str) -> () {
+fn buildsa(
+    reference_path: &str,
+    minimizer_k: usize,
+    window_w: usize,
+    output: &str,
+    minimizer_type: &str,
+) -> () {
     let min_type = match minimizer_type {
         "LexMin" => MinimizerType::LexMin,
         "LexMax" => MinimizerType::LexMax,
@@ -18,7 +25,8 @@ fn buildsa(reference_path: &str, minimizer_k: usize, window_w: usize, output: &s
     let mut original_reference = get_reference(reference_path);
 
     // Compute the minimizer sequence, which is now a vector of original genome positions.
-    let mut minimizer_sequence = compute_minimizers(&original_reference, minimizer_k, window_w, min_type);
+    let mut minimizer_sequence =
+        compute_minimizers(&original_reference, minimizer_k, window_w, min_type);
 
     // add terminal k-mer to original_reference and correspnding index to minimizer_sequence
     original_reference.push_str(&"$".repeat(minimizer_k));
@@ -90,5 +98,11 @@ fn main() {
     let output = &args[4];
     let minimizer_type = &args[5];
 
-    buildsa(reference_path, minimizer_k, window_w, output, minimizer_type);
+    buildsa(
+        reference_path,
+        minimizer_k,
+        window_w,
+        output,
+        minimizer_type,
+    );
 }
