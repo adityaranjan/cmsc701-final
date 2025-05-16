@@ -1,9 +1,9 @@
 use minimizer_sa::shared::{compare_minimizer_sequences, compute_minimizers, MinimizerStringData};
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
-use rand::Rng;
 
 
 fn get_data(index: &str) -> MinimizerStringData {
@@ -72,7 +72,8 @@ fn process_query(
     mut original_query_sequence: String,
     query_name: &str,
     output_file: &mut File,
-    rng: &mut rand::rngs::ThreadRng,
+    partial_check_ct: usize,
+    delta_check_ct: usize,
 ) -> () {
     // Transform the original query sequence into its minimizer sequence (indices into query)
     let mut query_minimizer_indices =
@@ -83,7 +84,7 @@ fn process_query(
     query_minimizer_indices.push(original_query_sequence.len() - data.minimizer_k);
 
     // Find the lower bound: First suffix >= query_minimizer_indices
-    let l = bin_search(
+    let l: usize = bin_search(
         0, // Search the entire minimizer_sa
         data.minimizer_sa.len(),
         &data.minimizer_sequence,
@@ -120,15 +121,20 @@ fn process_query(
 
     // potential matches found in minimizer space
 
-    let potential_match_positions: Vec<usize> = (l..r)
-        .map(|i| data.minimizer_sequence[data.minimizer_sa[i]])
+    let potential_match_positions: Vec<(usize, usize)> = (l..r)
+        .map(|i| (data.minimizer_sequence[data.minimizer_sa[i]], data.minimizer_sa[i]))
         .collect();
+
+    let mut query_delta = Vec::new();
+    for i in 0..(query_minimizer_indices.len() - 1) {
+        query_delta.push(query_minimizer_indices[i + 1] - query_minimizer_indices[i]);
+    }
 
     // Output the results
     let mut potential_match_ct = 0;
     let mut output_string = String::new();
 
-    for pos in potential_match_positions {
+    for (pos, minimizer_seq_idx) in potential_match_positions {
         if (pos < query_minimizer_indices[0])
             || (pos + (original_query_sequence.len() - query_minimizer_indices[0] - 1)
                 >= data.reference.len() - data.minimizer_k)
@@ -140,13 +146,52 @@ fn process_query(
             continue;
         }
 
+        let mut skip_iter = false;
+
+        // check if deltas of minimizer positions match
+        for i in 0..std::cmp::min(delta_check_ct, query_delta.len()) {
+            if query_delta[i] != (data.minimizer_sequence[minimizer_seq_idx + i + 1] - data.minimizer_sequence[minimizer_seq_idx + i]) {
+                skip_iter = true;
+                break;
+            }
+        }
+
+        if skip_iter {
+            // deltas don't match
+            continue;
+        }
+
         // check if the minimizer sequence in the reference matches the query
-        // for some small number of random positions
+        // for some small number of positions
+        let mut remove_indices = HashSet::new();
 
-        let random_index = rng.random_range(0..original_query_sequence.len());
-        let reference_pos = random_index + pos - query_minimizer_indices[0];
+        for curr_idx in query_minimizer_indices.iter() {
+            for i in 0..data.minimizer_k {
+                remove_indices.insert(curr_idx + i);
+            }
+        }
 
-        if &original_query_sequence[random_index..(random_index + 1)] != &data.reference[reference_pos..(reference_pos + 1)] {
+        let mut i = 0;
+        let mut relevant_check_ct = 0;
+
+        while relevant_check_ct < partial_check_ct && i < original_query_sequence.len() {
+            i += 1;
+
+            if remove_indices.contains(&(i - 1)) {
+                continue;
+            }
+
+            relevant_check_ct += 1;
+
+            let reference_pos = (i - 1) + pos - query_minimizer_indices[0];
+
+            if &original_query_sequence[(i - 1)..i] != &data.reference[reference_pos..(reference_pos + 1)] {
+                skip_iter = true;
+                break;
+            }
+        }
+
+        if skip_iter {
             // characters don't match
             continue;
         }
@@ -154,8 +199,7 @@ fn process_query(
         potential_match_ct += 1;
 
         output_string.push_str("\t");
-        output_string.push_str(&((pos - query_minimizer_indices[0]).to_string()));
-        // original genome positions
+        output_string.push_str(&((pos - query_minimizer_indices[0]).to_string()));  // original genome position
     }
 
     output_string.insert_str(0, &potential_match_ct.to_string());
@@ -165,7 +209,7 @@ fn process_query(
     writeln!(output_file, "{}", output_string).expect("failed to write to the output file!");
 }
 
-fn querysa(index: &str, queries: &str, output: &str) -> () {
+fn querysa(index: &str, queries: &str, output: &str, partial_check_ct: usize, delta_check_ct: usize) -> () {
     let data = get_data(index);
 
     let file = File::open(queries).expect("queries file couldn't be opened!!");
@@ -178,8 +222,6 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
     let mut curr_query = String::new();
     let mut curr_sequence_vec: Vec<String> = Vec::new();
 
-    let mut rng = rand::rng();
-
     for line in reader.lines() {
         let line = line.expect("failed to read the line!");
 
@@ -189,7 +231,7 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
                     curr_sequence = curr_sequence_vec.join("");
                     curr_sequence_vec.clear();
 
-                    process_query(&data, curr_sequence, &curr_query, &mut output_file, &mut rng);
+                    process_query(&data, curr_sequence, &curr_query, &mut output_file, partial_check_ct, delta_check_ct);
                 }
 
                 curr_query = (&line[1..]).to_string();
@@ -203,15 +245,15 @@ fn querysa(index: &str, queries: &str, output: &str) -> () {
     // Process the last query
     curr_sequence = curr_sequence_vec.join("");
     curr_sequence_vec.clear();
-    process_query(&data, curr_sequence, &curr_query, &mut output_file, &mut rng);
+    process_query(&data, curr_sequence, &curr_query, &mut output_file, partial_check_ct, delta_check_ct);
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 4 {
+    if args.len() < 6 {
         eprintln!(
-            "Usage: {} <index_path> <queries_path> <output_path>",
+            "Usage: {} <index_path> <queries_path> <output_path> <partial_check_ct> <delta_check_ct>",
             args[0]
         );
         return;
@@ -220,6 +262,8 @@ fn main() {
     let index = &args[1];
     let queries = &args[2];
     let output = &args[3];
+    let partial_check_ct: usize = args[4].parse().unwrap_or(0);
+    let delta_check_ct: usize = args[5].parse().unwrap_or(0);
 
-    querysa(index, queries, output);
+    querysa(index, queries, output, partial_check_ct, delta_check_ct);
 }

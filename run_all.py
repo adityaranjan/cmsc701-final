@@ -3,6 +3,12 @@ import time
 import os
 import re
 import csv
+import sys
+
+arguments = sys.argv[1:]
+minimizer_ordering = arguments[0]
+random_check_ct = arguments[1]
+delta_check_ct = arguments[2]
 
 reference_path = "data/test_input/salmonella.fa"
 reads_path = "data/test_input/reads_sal_sub.fq"
@@ -25,7 +31,7 @@ for w in range(4, 12):
         # Run build command and time it
         build_cmd = [
             "cargo", "run", "--bin", "buildsa", reference_path,
-            str(k), str(w), build_output, "LexMin"
+            str(k), str(w), build_output, minimizer_ordering
         ]
         start_build = time.time()
         build_proc = subprocess.run(build_cmd, capture_output=True, text=True)
@@ -43,7 +49,7 @@ for w in range(4, 12):
         # Run query command and time it
         query_cmd = [
             "cargo", "run", "--bin", "querysa", build_output,
-            reads_path, query_output
+            reads_path, query_output, random_check_ct, delta_check_ct
         ]
         start_query = time.time()
         subprocess.run(query_cmd, check=True)
